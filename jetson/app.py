@@ -129,3 +129,8 @@ def get_weather() -> str:
     print("Done")
 
     return weather
+
+
+@app.get("/ping")
+def ping() -> str:
+    return "pong"
