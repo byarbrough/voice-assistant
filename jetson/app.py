@@ -10,6 +10,7 @@ The FastAPI app waits for a GET request to /weather upon which it:
 5. Returns the weather as the response to the original GET request.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 import sounddevice as sd
@@ -48,9 +49,9 @@ def build_pipeline(model_id: str = "distil-whisper/distil-medium.en") -> Pipelin
         model=model,
         tokenizer=processor.tokenizer,
         feature_extractor=processor.feature_extractor,
-        max_new_tokens=128,
         torch_dtype=torch_dtype,
         device=device,
+        generate_kwargs={"max_new_tokens": 128},
     )
     return pipe
 
@@ -90,24 +91,37 @@ def wttr_request(location: str) -> str:
     return response.text
 
 
-pipe: Pipeline = build_pipeline()
-print("HuggingFace pipeline created")
+# FastAPI startup tasks
+pipe: Pipeline | None = None
 
-app: FastAPI = FastAPI()
-print("FastAPI app starting")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Runs according the the lifespan of the FastAPI app.
+    See https://fastapi.tiangolo.com/advanced/events/#lifespan
+    """
+    # Create the HuggingFace Pipeline
+    pipe: Pipeline = build_pipeline()
+    print("HuggingFace pipeline created")
+    # Return control the the rest of the app
+    yield
+    # Cleanup on app exit
+    print("🧹")
+
+
+app: FastAPI = FastAPI(lifespan=lifespan)
 
 
 @app.get("/weather", response_class=PlainTextResponse)
 def get_weather() -> str:
-    # Start recording
-    # print("Recording...")
-    # audio = record_audio()
-    # print("Done")
-    # print("Transcribing...")
-    # speech = pipe(audio)
-    # print(f"Speech: {speech}")
-    # print("Processing with LLM...")
-    # location = llm_process(speech)
+    print("Recording...")
+    audio = record_audio()
+    print("Done")
+    print("Transcribing...")
+    speech = pipe(audio)
+    print(f"Speech: {speech}")
+    print("Processing with LLM...")
+    location = llm_process(speech)
     location = llm_process("speech")
     print(f"LLM returned: {location}")
     print("Making request to wttr.in")
